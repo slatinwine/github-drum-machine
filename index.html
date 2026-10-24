@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>代码鼓机 · 听见你的提交频率</title>
+<style>
+  :root {
+    --ink: #1a1f2b;
+    --ink-soft: #5b6472;
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --line: #e6e9ee;
+    --blue: #2f6fed;
+    --blue-dim: #a9c0f0;
+    --radius: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--ink); min-height: 100vh;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 44px 20px 64px; }
+
+  header { text-align: center; margin-bottom: 30px; }
+  header h1 { font-size: 25px; font-weight: 700; }
+  header p { color: var(--ink-soft); margin-top: 8px; font-size: 14px; }
+
+  .search {
+    display: flex; gap: 10px; background: var(--card);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 10px; box-shadow: 0 2px 10px rgba(20,30,50,.05);
+  }
+  .search input {
+    flex: 1; border: none; outline: none; font-size: 15px;
+    padding: 10px 14px; background: transparent; color: var(--ink);
+  }
+  .search input::placeholder { color: #9aa3b0; }
+  .search button {
+    border: none; background: var(--blue); color: #fff; font-size: 15px;
+    font-weight: 600; padding: 10px 26px; border-radius: 8px; cursor: pointer;
+  }
+  .search button:hover { background: #2258c7; }
+  .search button:disabled { background: var(--blue-dim); cursor: wait; }
+  .hint { text-align: center; color: #9aa3b0; font-size: 13px; margin-top: 10px; }
+
+  .status { text-align: center; margin: 24px 0 0; font-size: 14px; color: var(--ink-soft); display: none; }
+  .status.error { color: #c23b3b; }
+
+  .result { display: none; margin-top: 30px; }
+
+  /* 仓库头部 */
+  .repo-head {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 20px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px;
+  }
+  .repo-head h2 { font-size: 18px; }
+  .repo-head h2 a { color: var(--blue); text-decoration: none; }
+  .repo-head h2 a:hover { text-decoration: underline; }
+  .repo-head .meta { color: var(--ink-soft); font-size: 13px; }
+
+  /* 砖块图 */
+  .panel {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 22px 24px; margin-top: 16px;
+  }
+  .panel h3 { font-size: 15px; margin-bottom: 4px; }
+  .panel .sub { font-size: 13px; color: var(--ink-soft); margin-bottom: 14px; }
+
+  .grid-scroll { overflow-x: auto; padding-bottom: 4px; }
+  #brickGrid { display: flex; gap: 3px; }
+  .week { display: flex; flex-direction: column; gap: 3px; }
+  .cell {
+    width: 12px; height: 12px; border-radius: 3px;
+    background: #ebeef2; flex: none;
+  }
+  .cell.l1 { background: #c3d5f8; }
+  .cell.l2 { background: #7fa4f2; }
+  .cell.l3 { background: #4a7fee; }
+  .cell.l4 { background: #2258c7; }
+  .cell.today { outline: 2px solid var(--ink); outline-offset: -2px; }
+  .legend { display: flex; align-items: center; gap: 5px; justify-content: flex-end; margin-top: 10px; font-size: 12px; color: var(--ink-soft); }
+  .legend .cell { width: 11px; height: 11px; }
+  .month-row { display: flex; gap: 3px; font-size: 11px; color: #9aa3b0; margin-bottom: 4px; }
+  .month-label { font-size: 11px; }
+
+  /* 鼓机 */
+  .transport { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .play-btn {
+    border: none; background: var(--blue); color: #fff; font-size: 15px;
+    font-weight: 600; padding: 11px 30px; border-radius: 10px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .play-btn:hover { background: #2258c7; }
+  .play-btn.playing { background: var(--ink); }
+  .ctrl { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+  .ctrl input[type=range] { accent-color: var(--blue); width: 130px; }
+  .ctrl b { color: var(--ink); min-width: 52px; }
+  .now-playing { font-size: 13px; color: var(--ink-soft); min-width: 130px; }
+
+  /* 音轨说明 */
+  .tracks { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 16px; }
+  .track {
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
+    font-size: 12px; color: var(--ink-soft); background: var(--bg);
+  }
+  .track b { display: block; color: var(--ink); font-size: 13px; margin-bottom: 2px; }
+
+  .share-row { display: flex; align-items: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .ghost-btn {
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+    font-size: 13px; font-weight: 600; padding: 9px 18px; border-radius: 8px; cursor: pointer;
+  }
+  .ghost-btn:hover { border-color: var(--blue); color: var(--blue); }
+  #shareMsg { font-size: 13px; color: var(--ink-soft); }
+  .tips { margin-top: 14px; font-size: 12px; color: #9aa3b0; line-height: 1.8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>代码鼓机</h1>
+    <p>填入一个 GitHub 仓库地址，看它的提交砖块图，再听它变成鼓点</p>
+  </header>
+
+  <form class="search" id="form">
+    <input id="urlInput" type="text" placeholder="例如：https://github.com/microsoft/vscode" autocomplete="off">
+    <button type="submit" id="btn">生成</button>
+  </form>
+  <div class="hint">支持 github.com/用户名/仓库名，仅查询公开仓库，无需登录</div>
+
+  <div class="status" id="status"></div>
+
+  <div class="result" id="result">
+    <div class="repo-head">
+      <h2><a id="rLink" target="_blank" rel="noopener"></a></h2>
+      <span class="meta" id="rMeta"></span>
+    </div>
+
+    <div class="panel">
+      <h3>提交砖块图（近三个月）</h3>
+      <div class="sub" id="brickSub"></div>
+      <div class="grid-scroll"><div id="brickGrid"></div></div>
+      <div class="legend">
+        少 <span class="cell"></span><span class="cell l1"></span><span class="cell l2"></span><span class="cell l3"></span><span class="cell l4"></span> 多
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>鼓机播放</h3>
+      <div class="sub">一周 = 一拍，提交越多鼓点越响；周一到周日各对应一件乐器</div>
+      <div class="transport">
+        <button class="play-btn" id="playBtn">▶ 播放</button>
+        <div class="ctrl">速度 <input type="range" id="bpm" min="90" max="400" value="180"><b id="bpmVal">180 BPM</b></div>
+        <div class="ctrl">音量 <input type="range" id="vol" min="0" max="100" value="70"><b id="volVal">70%</b></div>
+        <div class="now-playing" id="nowPlaying"></div>
+      </div>
+      <div class="share-row">
+        <button class="ghost-btn" id="copyLinkBtn">🔗 复制分享链接</button>
+        <button class="ghost-btn" id="wavBtn">⬇ 导出 WAV 音频</button>
+        <span id="shareMsg"></span>
+      </div>
+      <div class="tracks">
+        <div class="track"><b>周一 · 底鼓</b>一周的开头，蓄力</div>
+        <div class="track"><b>周二 · 军鼓</b></div>
+        <div class="track"><b>周三 · 踩镲</b></div>
+        <div class="track"><b>周四 · 拍手</b>一周过半的高潮</div>
+        <div class="track"><b>周五 · 嗵鼓</b></div>
+        <div class="track"><b>周六 · 边击</b>周末加班的声音</div>
+        <div class="track"><b>周日 · 镲片</b></div>
+      </div>
+      <div class="tips">
+        · 90 天的提交数按天统计，当天的提交越多，对应鼓点的力度越大（连续多次提交会变成重音）<br>
+        · 每个 12px 的小方块是「一周的一天」，一列是一周，颜色越深提交越多；播放时当前周的整列会高亮闪动<br>
+        · 「复制分享链接」会把节奏数据编码进网址，对方打开即可直接播放，无需重新拉取 GitHub；也可以导出 WAV 音频文件发给别人
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const form = $('form'), input = $('urlInput'), btn = $('btn'), statusEl = $('status');
+
+/* ---------- 工具 ---------- */
+function showStatus(msg, isError) {
+  statusEl.textContent = msg;
+  statusEl.className = 'status' + (isError ? ' error' : '');
+  statusEl.style.display = 'block';
+}
+function parseRepo(raw) {
+  const s = raw.trim().replace(/\/+$/, '');
+  if (!s) return null;
+  const m = s.match(/github\.com[/:]([\w.-]+)\/([\w.-]+)/i);
+  if (m) return { owner: m[1], repo: m[2].replace(/\.git$/, '') };
+  if (/^[\w.-]+\/[\w.-]+$/.test(s)) { const [o, r] = s.split('/'); return { owner: o, repo: r }; }
+  return null;
+}
+async function fetchJSON(url) {
+  const res = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+  if (res.status === 404) throw new Error('仓库不存在或不是公开仓库（404）');
+  if (res.status === 403) throw new Error('GitHub API 请求次数已达上限（未登录每小时 60 次），请稍后再试');
+  if (!res.ok) throw new Error('GitHub API 出错：HTTP ' + res.status);
+  return res.json();
+}
+
+/* ---------- 拉取近一年提交，按天计数 ---------- */
+async function fetchDailyCounts(owner, repo) {
+  const since = new Date(Date.now() - 91 * 864e5).toISOString();
+  let page = 1, total = 0;
+  const counts = new Map();           // 'YYYY-MM-DD' -> n
+  while (page <= 5) {                 // 最多 500 条，足够覆盖三个月的提交密度
+    const list = await fetchJSON(
+      `https://api.github.com/repos/${owner}/${repo}/commits?per_page=100&page=${page}&since=${since}`
+    );
+    if (!Array.isArray(list) || list.length === 0) break;
+    for (const c of list) {
+      const d = c.commit.committer.date ? new Date(c.commit.committer.date) : null;
+      if (!d || isNaN(d)) continue;
+      const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    total += list.length;
+    if (list.length < 100) break;
+    page++;
+  }
+  return { counts, total };
+}
+
+/* ---------- 砖块图 ---------- */
+let weeksData = [];   // [{ cells: [cell el ×7], counts: [n ×7] }]
+let todayKey = '';
+let currentRepo = '', currentStartKey = '';
+const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+function levelOf(n) { return n === 0 ? 0 : n <= 1 ? 1 : n <= 3 ? 2 : n <= 7 ? 3 : 4; }
+
+function renderBricks(counts, opts = {}) {
+  const grid = $('brickGrid');
+  grid.innerHTML = '';
+  weeksData = [];
+
+  const today = new Date();
+  todayKey = dkey(today);
+
+  // 起点：90 天前对齐到周日；分享模式下用编码里带的起始日期
+  let start;
+  if (opts.start) {
+    start = new Date(opts.start + 'T00:00:00');
+  } else {
+    let s0 = new Date(today.getTime() - 90 * 864e5);
+    start = new Date(s0.getFullYear(), s0.getMonth(), s0.getDate() - s0.getDay());
+  }
+  currentStartKey = dkey(start);
+  const ignoreFuture = !!opts.ignoreFuture;
+
+  const monthLabels = [];
+  let lastMonth = -1;
+
+  // 逐周生成列，直到超出今天
+  for (let w = 0; ; w++) {
+    const colStart = new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7);
+    if (colStart > today) break;
+    const col = document.createElement('div');
+    col.className = 'week';
+    const cells = [];
+    for (let d = 0; d < 7; d++) {
+      const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7 + d);
+      const key = dkey(date);
+      if (date > today && !ignoreFuture) { cells.push(null); continue; }
+      const cell = document.createElement('div');
+      const n = counts.get(key) || 0;
+      cell.className = 'cell' + (n ? ' l' + levelOf(n) : '') + (key === todayKey ? ' today' : '');
+      cell.title = `${key} · ${n} 次提交`;
+      col.appendChild(cell);
+      cells.push(cell);
+      // 月份标签：每周第一列的 1 号
+      if (d === 0 && date.getDate() <= 7 && date.getMonth() !== lastMonth) {
+        lastMonth = date.getMonth();
+        monthLabels.push({ week: w, text: (date.getMonth() + 1) + '月' });
+      }
+    }
+    grid.appendChild(col);
+    weeksData.push({ cells, counts: Array.from({ length: 7 }, (_, d) => {
+      const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7 + d);
+      return (!ignoreFuture && date > today) ? 0 : (counts.get(dkey(date)) || 0);
+    })});
+  }
+
+  // 月份标签行（简单按周偏移量铺）
+  const labelRow = document.createElement('div');
+  labelRow.className = 'month-row';
+  let cursor = 0;
+  for (const ml of monthLabels) {
+    const pad = document.createElement('span');
+    pad.style.width = (ml.week - cursor) * 15 + 'px';
+    pad.style.flex = 'none';
+    labelRow.appendChild(pad);
+    const lab = document.createElement('span');
+    lab.className = 'month-label';
+    lab.textContent = ml.text;
+    lab.style.width = '40px';
+    labelRow.appendChild(lab);
+    cursor = ml.week + 1;
+  }
+  grid.insertBefore(labelRow, grid.firstChild);
+}
+
+function dkey(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+/* ---------- 鼓机（Web Audio 合成） ---------- */
+let audioCtx = null, master = null;
+let playing = false, playTimer = null, playRAF = null;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    master = audioCtx.createGain();
+    master.gain.value = 0.7;
+    master.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function noiseBuffer(ctx, dur) {
+  const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  return buf;
+}
+
+function playDrum(ctx, dest, instrument, when, velocity) {
+  const t = when, v = Math.max(0.05, velocity);
+  const g = ctx.createGain(); g.connect(dest);
+
+  if (instrument === 'kick') {
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(42, t + 0.28);
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    o.connect(g); o.start(t); o.stop(t + 0.32);
+  } else if (instrument === 'snare') {
+    const n = ctx.createBufferSource(); n.buffer = noiseBuffer(ctx, 0.2);
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1800; f.Q.value = 0.8;
+    g.gain.setValueAtTime(v * 0.8, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    n.connect(f); f.connect(g); n.start(t); n.stop(t + 0.2);
+    const o = ctx.createOscillator(); o.frequency.value = 190;
+    const g2 = ctx.createGain(); g2.gain.setValueAtTime(v * 0.5, t);
+    g2.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.connect(g2); g2.connect(dest); o.start(t); o.stop(t + 0.12);
+  } else if (instrument === 'hat') {
+    const n = ctx.createBufferSource(); n.buffer = noiseBuffer(ctx, 0.06);
+    const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7500;
+    g.gain.setValueAtTime(v * 0.35, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+    n.connect(f); f.connect(g); n.start(t); n.stop(t + 0.06);
+  } else if (instrument === 'clap') {
+    for (let i = 0; i < 3; i++) {
+      const n = ctx.createBufferSource(); n.buffer = noiseBuffer(ctx, 0.12);
+      const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1200; f.Q.value = 1.5;
+      const gg = ctx.createGain();
+      const t0 = t + i * 0.012;
+      gg.gain.setValueAtTime(v * 0.6, t0);
+      gg.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12);
+      n.connect(f); f.connect(gg); gg.connect(dest);
+      n.start(t0); n.stop(t0 + 0.13);
+    }
+  } else if (instrument === 'tom') {
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(220, t);
+    o.frequency.exponentialRampToValueAtTime(110, t + 0.22);
+    g.gain.setValueAtTime(v * 0.8, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    o.connect(g); o.start(t); o.stop(t + 0.27);
+  } else if (instrument === 'rim') {
+    const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = 1700;
+    g.gain.setValueAtTime(v * 0.25, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+    o.connect(g); o.start(t); o.stop(t + 0.05);
+  } else { // crash
+    const n = ctx.createBufferSource(); n.buffer = noiseBuffer(ctx, 0.8);
+    const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 5000;
+    g.gain.setValueAtTime(v * 0.3, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+    n.connect(f); f.connect(g); n.start(t); n.stop(t + 0.8);
+  }
+}
+
+const INSTRUMENTS = ['kick', 'snare', 'hat', 'clap', 'tom', 'rim', 'crash']; // 周日→周六
+const WEEKDAY_NAME = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+function velocityOf(count) {
+  if (count === 0) return 0;
+  return 0.35 + Math.min(count / 6, 1) * 0.65;
+}
+
+function stopPlayback() {
+  playing = false;
+  clearTimeout(playTimer);
+  cancelAnimationFrame(playRAF);
+  $('playBtn').textContent = '▶ 播放';
+  $('playBtn').classList.remove('playing');
+  $('nowPlaying').textContent = '';
+  document.querySelectorAll('.week.flash').forEach(el => el.classList.remove('flash'));
+  document.querySelectorAll('.cell.flash').forEach(el => el.classList.remove('flash'));
+}
+
+function startPlayback() {
+  if (!weeksData.length) return;
+  ensureAudio();
+  playing = true;
+  $('playBtn').textContent = '■ 停止';
+  $('playBtn').classList.add('playing');
+
+  const weekSec = 60 / +$('bpm').value;      // 一周 = 一拍
+  const t0 = audioCtx.currentTime + 0.15;
+  const hits = [];                            // {week, day, t}
+
+  weeksData.forEach((w, wi) => {
+    w.counts.forEach((c, di) => {
+      if (!c) return;
+      const t = t0 + wi * weekSec + di * (weekSec / 7);
+      playDrum(audioCtx, master, INSTRUMENTS[di], t, velocityOf(c));
+      hits.push({ week: wi, day: di, t });
+    });
+  });
+
+  const loopMs = weeksData.length * weekSec * 1000 + 400;
+  playTimer = setTimeout(startPlayback, loopMs);   // 循环
+
+  // 高亮当前周
+  const tick = () => {
+    if (!playing) return;
+    const now = audioCtx.currentTime;
+    let cur = -1;
+    for (const h of hits) { if (h.t <= now) cur = h.week; else break; }
+    document.querySelectorAll('.week.flash').forEach(el => el.classList.remove('flash'));
+    if (cur >= 0) {
+      const col = $('brickGrid').children[1 + cur]; // 第一行是月份标签
+      if (col) {
+        col.classList.add('flash');
+        const meta = weeksData[cur];
+        const sum = meta.counts.reduce((a, b) => a + b, 0);
+        $('nowPlaying').textContent = `第 ${cur + 1} 周 · ${sum} 次提交`;
+      }
+    }
+    playRAF = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+/* 闪光样式动态注入（.flash 需要盖过格子颜色） */
+const flashStyle = document.createElement('style');
+flashStyle.textContent = `
+  .week.flash .cell:not(:empty) { outline: 2px solid #2258c7; outline-offset: -2px; }
+  .week.flash .cell { box-shadow: 0 0 0 2px rgba(47,111,237,.55) inset; }
+`;
+document.head.appendChild(flashStyle);
+
+/* ---------- 事件 ---------- */
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  stopPlayback();
+  const parsed = parseRepo(input.value);
+  if (!parsed) { showStatus('无法识别链接，请输入类似 https://github.com/用户名/仓库名 的地址', true); return; }
+
+  btn.disabled = true;
+  showStatus(`正在拉取 ${parsed.owner}/${parsed.repo} 近一年的提交记录…`);
+  $('result').style.display = 'none';
+
+  try {
+    const [{ counts, total }, repo] = await Promise.all([
+      fetchDailyCounts(parsed.owner, parsed.repo),
+      fetchJSON(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}`)
+    ]);
+
+    if (total === 0) {
+      showStatus('该仓库近一年没有提交记录，试试别的仓库吧', true);
+      return;
+    }
+
+    $('rLink').textContent = repo.full_name;
+    $('rLink').href = repo.html_url;
+    const days = counts.size;
+    const maxDay = Math.max(...counts.values());
+    $('rMeta').textContent = `近三个月 ${total} 次提交 · 有提交的天数 ${days} 天 · 单日最多 ${maxDay} 次`;
+    renderBricks(counts);
+    currentRepo = repo.full_name;
+    $('result').style.display = 'block';
+    statusEl.style.display = 'none';
+  } catch (err) {
+    showStatus(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('playBtn').addEventListener('click', () => playing ? stopPlayback() : startPlayback());
+$('bpm').addEventListener('input', e => {
+  $('bpmVal').textContent = e.target.value + ' BPM';
+  if (playing) { stopPlayback(); startPlayback(); }   // 重新按新速度排布
+});
+$('vol').addEventListener('input', e => {
+  $('volVal').textContent = e.target.value + '%';
+  if (master) master.gain.value = e.target.value / 100;
+});
+
+/* ---------- 分享：编码进 URL hash ---------- */
+function shareMsg(text) { $('shareMsg').textContent = text; }
+
+function currentPayload() {
+  if (!weeksData.length) return null;
+  let s = '';
+  weeksData.forEach(w => w.counts.forEach(c => { s += ALPHA[Math.min(c, 63)]; }));
+  return btoa((currentRepo || 'unknown') + '|' + currentStartKey + '|' + s);
+}
+
+function decodePayload(enc) {
+  const raw = atob(enc);
+  const i1 = raw.indexOf('|'), i2 = raw.indexOf('|', i1 + 1);
+  const name = raw.slice(0, i1), startKey = raw.slice(i1 + 1, i2), chars = raw.slice(i2 + 1);
+  const start = new Date(startKey + 'T00:00:00');
+  const counts = new Map();
+  for (let k = 0; k < chars.length; k++) {
+    const w = Math.floor(k / 7), d = k % 7;
+    const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7 + d);
+    const v = ALPHA.indexOf(chars[k]);
+    if (v > 0) counts.set(dkey(date), v);
+  }
+  return { name, startKey, counts };
+}
+
+$('copyLinkBtn').addEventListener('click', async () => {
+  const p = currentPayload();
+  if (!p) { shareMsg('请先生成一个仓库的节奏'); return; }
+  const url = location.href.split('#')[0] + '#d=' + p;
+  history.replaceState(null, '', '#d=' + p);
+  try {
+    await navigator.clipboard.writeText(url);
+    shareMsg('✅ 分享链接已复制，对方打开即可播放同一份节奏');
+  } catch (e) {
+    prompt('复制下面的分享链接：', url);
+  }
+});
+
+/* ---------- 导出 WAV ---------- */
+function audioBufferToWav(buf) {
+  const nCh = buf.numberOfChannels, sr = buf.sampleRate, len = buf.length;
+  const bytes = 44 + len * nCh * 2;
+  const ab = new ArrayBuffer(bytes), view = new DataView(ab);
+  const wstr = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  wstr(0, 'RIFF'); view.setUint32(4, bytes - 8, true); wstr(8, 'WAVE');
+  wstr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, nCh, true); view.setUint32(24, sr, true);
+  view.setUint32(28, sr * nCh * 2, true); view.setUint16(32, nCh * 2, true); view.setUint16(34, 16, true);
+  wstr(36, 'data'); view.setUint32(40, bytes - 44, true);
+  const chans = [];
+  for (let c = 0; c < nCh; c++) chans.push(buf.getChannelData(c));
+  let off = 44;
+  for (let i = 0; i < len; i++) for (let c = 0; c < nCh; c++) {
+    const v = Math.max(-1, Math.min(1, chans[c][i]));
+    view.setInt16(off, v < 0 ? v * 0x8000 : v * 0x7fff, true); off += 2;
+  }
+  return new Blob([ab], { type: 'audio/wav' });
+}
+
+async function renderWavBlob() {
+  const weekSec = 60 / +$('bpm').value;
+  const sr = 44100;
+  const dur = weeksData.length * weekSec + 1.5;
+  const off = new OfflineAudioContext(2, Math.ceil(dur * sr), sr);
+  const g = off.createGain();
+  g.gain.value = master ? master.gain.value : 0.7;
+  g.connect(off.destination);
+  const t0 = 0.1;
+  weeksData.forEach((w, wi) => w.counts.forEach((c, di) => {
+    if (c) playDrum(off, g, INSTRUMENTS[di], t0 + wi * weekSec + di * (weekSec / 7), velocityOf(c));
+  }));
+  const rendered = await off.startRendering();
+  return audioBufferToWav(rendered);
+}
+
+$('wavBtn').addEventListener('click', async () => {
+  if (!weeksData.length) { shareMsg('请先生成一个仓库的节奏'); return; }
+  shareMsg('正在渲染 WAV…');
+  try {
+    const blob = await renderWavBlob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (currentRepo || 'drum').replace(/\//g, '-') + '-drum.wav';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    shareMsg('✅ WAV 已导出，可直接发给任何人');
+  } catch (e) {
+    shareMsg('渲染失败：' + e.message);
+  }
+});
+
+/* ---------- 打开时检测分享数据 ---------- */
+(function loadFromHash() {
+  const m = location.hash.match(/#d=([A-Za-z0-9+/=]+)/);
+  if (!m) return;
+  try {
+    const { name, startKey, counts } = decodePayload(m[1]);
+    currentRepo = name;
+    renderBricks(counts, { start: startKey, ignoreFuture: true });
+    $('rLink').textContent = name;
+    $('rLink').href = 'https://github.com/' + name;
+    $('rMeta').textContent = '来自分享链接的节奏数据（已内置，无需请求 GitHub）';
+    $('result').style.display = 'block';
+    statusEl.style.display = 'none';
+  } catch (e) { /* 无效分享数据，忽略 */ }
+})();
+</script>
+</body>
+</html>
