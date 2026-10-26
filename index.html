@@ -618,5 +618,35 @@ $('wavBtn').addEventListener('click', async () => {
   } catch (e) { /* 无效分享数据，忽略 */ }
 })();
 </script>
+<style>
+  .qr-footer{max-width:960px;margin:26px auto 0;padding:0 20px 46px}
+  .qr-footer-row{display:flex;gap:16px;flex-wrap:wrap}
+  .qr-footer-card.xhs strong{color:#FF2442}
+  .qr-footer-card{display:flex;align-items:center;gap:16px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 20px;width:max-content;max-width:100%;box-shadow:0 2px 10px rgba(20,30,50,.05)}
+  .qr-footer-card img{width:96px;height:96px;border-radius:8px;display:block}
+  .qr-footer-text{display:flex;flex-direction:column;gap:4px}
+  .qr-footer-text strong{font-size:14px;color:var(--ink);font-weight:600}
+  .qr-footer-text span{font-size:12px;color:var(--ink-soft)}
+</style>
+<footer class="qr-footer">
+<div class="qr-footer-row">
+  <div class="qr-footer-card">
+    <img src="qrcode.jpg" alt="公众号二维码">
+    <div class="qr-footer-text">
+      <strong>扫码关注公众号</strong>
+      <span>代码鼓机 · 更多 AI 实验与更新</span>
+    </div>
+  </div>
+
+  <div class="qr-footer-card xhs">
+    <img src="xhs-qr.jpg" alt="小红书二维码">
+    <div class="qr-footer-text">
+      <strong>小红书 · 酒里加盐</strong>
+      <span>小红书号 6100441379 · 扫码找到我</span>
+      <span>酒馆会往酒里加盐，让顾客越喝越渴</span>
+    </div>
+  </div>
+</div>
+</footer>
 </body>
 </html>
